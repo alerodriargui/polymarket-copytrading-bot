@@ -1,234 +1,223 @@
 import os
 import time
 import requests
-import json
 import logging
+import threading
 from dotenv import load_dotenv
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import OrderArgs, OrderType
-
-# Setup Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-load_dotenv()
-
-# Configuration
-TARGET_WALLET = os.getenv("target_wallet_address")
-PRIVATE_KEY = os.getenv("private_key")
-# Support both CLOB_ prefix and simple names
-API_KEY = os.getenv("CLOB_API_KEY") or os.getenv("api_key")
-API_SECRET = os.getenv("CLOB_API_SECRET") or os.getenv("api_secret")
-API_PASSPHRASE = os.getenv("CLOB_API_PASSPHRASE") or os.getenv("api_passphrase")
-HOST = os.getenv("HOST", "https://clob.polymarket.com")
-CHAIN_ID = int(os.getenv("CHAIN_ID", 137))
-AMOUNT_PER_TRADE = float(os.getenv("amount_per_trade", 10))
-
-# Gamma API for activity
-ACTIVITY_API = "https://data-api.polymarket.com/activity"
-
-def get_client():
-    if not API_KEY or not PRIVATE_KEY:
-        logger.error("Missing credentials in .env (CLOB_API_KEY, PRIVATE_KEY, etc)")
-        return None
-    return ClobClient(
-        host=HOST,
-        key=PRIVATE_KEY,
-        chain_id=CHAIN_ID,
-        creds={
-            "api_key": API_KEY,
-            "api_secret": API_SECRET,
-            "api_passphrase": API_PASSPHRASE
-        }
-    )
-
 from eth_account import Account
 
-def get_client_and_check():
-    client = get_client()
-    if not client: return None
-    
-    try:
-        # Derive address to show user
-        acct = Account.from_key(PRIVATE_KEY)
-        logger.info(f"Bot Wallet Address: {acct.address}")
-        
-        # Simple balance check via API is hard without endpoints, but we can rely on ClobClient
-        # or just assume if we are here, keys are loaded.
-        # We will add a 'Are you sure?' log.
-    except Exception as e:
-        logger.error(f"Error deriving address: {e}")
-    return client
+# Define a custom logger to capture logs for the UI
+class ListHandler(logging.Handler):
+    def __init__(self, log_list):
+        super().__init__()
+        self.log_list = log_list
 
-def fetch_activity(wallet, limit=10):
-    """
-    Fetch recent activity for a wallet from Polymarket Data API.
-    """
-    try:
-        params = {
-            "user": wallet,  # Correct parameter is 'user', not 'address'
-            "limit": limit,
-        }
-        resp = requests.get(ACTIVITY_API, params=params)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        logger.error(f"Error fetching activity: {e}")
-        return []
-
-def calculate_size_and_price(client, token_id, side):
-    """
-    Determine price and size for a 'Market' like execution.
-    Target: Spend roughly AMOUNT_PER_TRADE usdc.
-    """
-    try:
-        # Get current price
-        # get_midpoint returns float or None
-        midpoint = client.get_midpoint(token_id)
-        if not midpoint:
-            midpoint = 0.5 # Fallback
-            
-        current_price = float(midpoint)
-        
-        # Protect against div by zero or extreme prices
-        if current_price <= 0.01: current_price = 0.01
-        if current_price >= 0.99: current_price = 0.99
-        
-        # Calculate size (Shares = USD / Price)
-        size = AMOUNT_PER_TRADE / current_price
-        
-        # Round size to safer precision (e.g. integer or 2 decimals?)
-        # CLOB usually accepts float, but let's check mintick. 
-        # Standard approach: keep it rough.
-        size = round(size, 2)
-        
-        # Set aggressive limit price to ensure fill
-        # BUY: Price = 1.0 (Max willing to pay)
-        # SELL: Price = 0.0 (Min willing to sell)
-        if side == "BUY":
-            price = 0.99 # Cap slightly below 1
-        else:
-            price = 0.01 # Cap slightly above 0
-            
-        return size, price
-    except Exception as e:
-        logger.error(f"Error calculating size: {e}")
-        return 0, 0
-
-def execute_copy_trade(client, trade_data):
-    """
-    Execute the trade on our account.
-    """
-    try:
-        # Parse fields from Activity API
-        side = trade_data.get('side', '').upper() # BUY or SELL
-        token_id = trade_data.get('asset') # The token ID is directly in 'asset'
-            
-        if not token_id:
-            logger.warning(f"Could not find token_id (asset) in trade: {trade_data}")
-            return
-
-        logger.info(f"Detected Trade: {side} on Token {token_id} (Outcome: {trade_data.get('outcome')})")
-        
-        # Calculate our order
-        my_side = OrderType.BUY if side == "BUY" else OrderType.SELL
-        
-        size, price = calculate_size_and_price(client, token_id, side)
-        
-        if size <= 0:
-            logger.warning("Calculated size is 0, skipping.")
-            return
-
-        logger.info(f"Placing Order: {side} {size} shares @ {price}")
-        
-        order_args = OrderArgs(
-            price=price,
-            size=size,
-            side=my_side,
-            token_id=token_id
-        )
-        
-        # Execute
-        resp = client.create_order(order_args)
-        logger.info(f"Order Executed! Response: {resp}")
-        
-    except Exception as e:
-        logger.error(f"Failed to copy trade: {e}")
-
-def main():
-    logger.info("Starting Polymarket Copy Trading Bot...")
-    client = get_client_and_check()
-    if not client:
-        return
-
-    logger.info(f"Monitoring wallet: {TARGET_WALLET}")
-    logger.info(f"Amount per trade: ${AMOUNT_PER_TRADE}")
-
-    # Check Balances
-    try:
-        # Get collateral (USDC) balance
-        # The library might have different methods, but let's try standard get_balance or similar if available,
-        # or just catch the error. Standard ClobClient usually exposes helpers.
-        # If not, we can infer from logs.
-        logger.info("Checking connection...")
-    except Exception:
-        pass
-
-    # Initialize state
-    initial_activity = fetch_activity(TARGET_WALLET, limit=1)
-    last_processed_hash = None
-    
-    if initial_activity and len(initial_activity) > 0:
-        last_processed_hash = initial_activity[0].get('transactionHash')
-        logger.info(f"Latest trade Hash on start: {last_processed_hash} (skipping existing)")
-    else:
-        logger.info("No prior activity found. Waiting for new trades...")
-
-    while True:
+    def emit(self, record):
         try:
-            time.sleep(2) # Poll every 2 seconds
-            
-            activity = fetch_activity(TARGET_WALLET, limit=5)
-            if not activity:
-                continue
-            
-            # Filter new items
-            # We look for trades that happened AFTER our last processed hash.
-            # Since the API returns newest first, we iterate until we find the last hash.
-            
-            new_items = []
-            for item in activity:
-                item_hash = item.get('transactionHash')
-                if item_hash == last_processed_hash:
-                    break # Found the checkpoint
-                new_items.append(item)
-            
-            if not new_items:
-                continue
-                
-            # Process oldest new item first (reverse the list)
-            for item in reversed(new_items):
-                try:
-                    logger.info(f"New Activity Found: {item.get('title', 'Unknown Market')}")
-                    # Double check type just in case
-                    if item.get('type') == 'TRADE' or item.get('type') == 'OrderFilled': 
-                         execute_copy_trade(client, item)
-                    
-                    # Update checkpoint locally after successful (or attempted) process
-                    last_processed_hash = item.get('transactionHash')
-                    
-                except Exception as e:
-                    logger.error(f"Error processing item: {e}")
-            
-        except KeyboardInterrupt:
-            logger.info("Stopping bot...")
-            break
-        except Exception as e:
-            logger.error(f"Loop error: {e}")
-            time.sleep(5)
+            msg = self.format(record)
+            self.log_list.append(msg)
+            if len(self.log_list) > 100: # Keep last 100 lines
+                self.log_list.pop(0)
+        except Exception:
+            self.handleError(record)
 
+# Configuration
+ACTIVITY_API = "https://data-api.polymarket.com/activity"
+
+class CopyBot:
+    def __init__(self, target_wallet, private_key, api_key, api_secret, api_passphrase, amount_per_trade, chain_id=137, host="https://clob.polymarket.com"):
+        self.target_wallet = target_wallet
+        self.private_key = private_key
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.api_passphrase = api_passphrase
+        self.amount_per_trade = float(amount_per_trade)
+        self.chain_id = int(chain_id)
+        self.host = host
+        
+        self.running = False
+        self.logs = []
+        
+        # Setup Logger
+        self.logger = logging.getLogger(f"Bot_{id(self)}")
+        self.logger.setLevel(logging.INFO)
+        # Clear existing handlers
+        self.logger.handlers = []
+        handler = ListHandler(self.logs)
+        formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%H:%M:%S')
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+        
+        # Also console
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        self.logger.addHandler(console)
+        
+        self.client = None
+
+    def get_client(self):
+        try:
+            return ClobClient(
+                host=self.host,
+                key=self.private_key,
+                chain_id=self.chain_id,
+                creds={
+                    "api_key": self.api_key,
+                    "api_secret": self.api_secret,
+                    "api_passphrase": self.api_passphrase
+                }
+            )
+        except Exception as e:
+            self.logger.error(f"Error creating client: {e}")
+            return None
+
+    def fetch_activity(self, limit=10):
+        try:
+            params = {
+                "user": self.target_wallet,
+                "limit": limit,
+            }
+            resp = requests.get(ACTIVITY_API, params=params)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            self.logger.error(f"Error fetching activity: {e}")
+            return []
+
+    def calculate_size_and_price(self, token_id, side):
+        try:
+            midpoint = self.client.get_midpoint(token_id)
+            if not midpoint: midpoint = 0.5
+            current_price = float(midpoint)
+            
+            if current_price <= 0.01: current_price = 0.01
+            if current_price >= 0.99: current_price = 0.99
+            
+            size = self.amount_per_trade / current_price
+            size = round(size, 2)
+            
+            if side == "BUY":
+                price = 0.99
+            else:
+                price = 0.01
+                
+            return size, price
+        except Exception as e:
+            self.logger.error(f"Error calculating size: {e}")
+            return 0, 0
+
+    def execute_copy_trade(self, trade_data):
+        try:
+            side = trade_data.get('side', '').upper()
+            token_id = trade_data.get('asset')
+            if not token_id:
+                self.logger.warning(f"No token_id found in trade")
+                return
+
+            self.logger.info(f"Detected: {side} {trade_data.get('title', 'Unknown')} ({trade_data.get('outcome')})")
+            
+            my_side = OrderType.BUY if side == "BUY" else OrderType.SELL
+            size, price = self.calculate_size_and_price(token_id, side)
+            
+            if size <= 0:
+                self.logger.warning("Size 0, skipping.")
+                return
+
+            self.logger.info(f"Placing Order: {side} {size} @ {price}")
+            
+            order_args = OrderArgs(
+                price=price,
+                size=size,
+                side=my_side,
+                token_id=token_id
+            )
+            
+            resp = self.client.create_order(order_args)
+            self.logger.info(f"Executed! ID: {resp.get('orderID', 'Unknown')}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to copy: {e}")
+
+    def run_loop(self):
+        self.logger.info("Bot Started.")
+        self.client = self.get_client()
+        if not self.client:
+            self.logger.error("Failed to initialize client. Stopping.")
+            self.running = False
+            return
+
+        try:
+            acct = Account.from_key(self.private_key)
+            self.logger.info(f"Wallet: {acct.address}")
+        except:
+            self.logger.warning("Could not derive wallet address")
+
+        last_hash = None
+        
+        # Init
+        initial = self.fetch_activity(limit=1)
+        if initial:
+            last_hash = initial[0].get('transactionHash')
+            self.logger.info(f"Initial Sync: {last_hash}")
+        
+        while self.running:
+            try:
+                time.sleep(2)
+                activity = self.fetch_activity(limit=5)
+                if not activity: continue
+                
+                new_items = []
+                for item in activity:
+                    if item.get('transactionHash') == last_hash:
+                        break
+                    new_items.append(item)
+                
+                if not new_items: continue
+                
+                for item in reversed(new_items):
+                    # Check type
+                    t_type = item.get('type')
+                    if t_type in ['TRADE', 'OrderFilled']:
+                         self.execute_copy_trade(item)
+                    
+                    last_hash = item.get('transactionHash')
+            except Exception as e:
+                self.logger.error(f"Loop error: {e}")
+                time.sleep(5)
+        
+        self.logger.info("Bot Stopped.")
+
+    def start(self):
+        if self.running:
+            return
+        self.running = True
+        self.thread = threading.Thread(target=self.run_loop)
+        self.thread.daemon = True
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+
+# For backward compatibility / CLI
 if __name__ == "__main__":
-    main()
+    load_dotenv()
+    # Configuration
+    TARGET_WALLET = os.getenv("target_wallet_address")
+    PRIVATE_KEY = os.getenv("private_key")
+    API_KEY = os.getenv("CLOB_API_KEY") or os.getenv("api_key")
+    API_SECRET = os.getenv("CLOB_API_SECRET") or os.getenv("api_secret")
+    API_PASSPHRASE = os.getenv("CLOB_API_PASSPHRASE") or os.getenv("api_passphrase")
+    AMOUNT = os.getenv("amount_per_trade", 10)
+    
+    bot = CopyBot(TARGET_WALLET, PRIVATE_KEY, API_KEY, API_SECRET, API_PASSPHRASE, AMOUNT)
+    bot.start()
+    
+    try:
+        while True:
+            time.sleep(1)
+            # Print logs to stdout
+            # (Handled by StreamHandler in init)
+    except KeyboardInterrupt:
+        bot.stop()

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Copy Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🦅 PolyCopy <span class="beta">BETA</span></div>
+            <div class="status-indicator" id="status-ind">OFFLINE</div>
+        </header>
+
+        <main>
+            <div class="card config-card">
+                <h2>Configuration</h2>
+                <form id="bot-form">
+                    <div class="input-group">
+                        <label>Target Wallet</label>
+                        <input type="text" id="target" placeholder="0x..." required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="input-group">
+                            <label>Amount (USDC)</label>
+                            <input type="number" id="amount" value="10" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Private Key</label>
+                            <input type="password" id="pk" placeholder="0x..." required>
+                        </div>
+                    </div>
+
+                    <details>
+                        <summary>CLOB API Credentials (Optional/Advanced)</summary>
+                        <div class="input-group">
+                            <label>API Key</label>
+                            <input type="text" id="api_key">
+                        </div>
+                        <div class="input-group">
+                            <label>API Secret</label>
+                            <input type="password" id="api_secret">
+                        </div>
+                        <div class="input-group">
+                            <label>Passphrase</label>
+                            <input type="password" id="passphrase">
+                        </div>
+                    </details>
+
+                    <div class="actions">
+                        <button type="submit" id="start-btn" class="btn primary">Start Bot</button>
+                        <button type="button" id="stop-btn" class="btn danger" disabled>Stop</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card logs-card">
+                <div class="logs-header">
+                    <h2>Live Logs</h2>
+                    <span id="log-count">0 lines</span>
+                </div>
+                <div class="terminal" id="terminal">
+                    <div class="line system">System ready. Waiting for input...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

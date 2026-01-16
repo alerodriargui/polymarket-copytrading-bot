@@ -1,18 +1,19 @@
-# 🦅 Polymarket Copy Trading Bot
+# 🦅 PolyCopy - Polymarket Copy Trading Bot
 
-**Automate your profits.** Capture the moves of the smartest whales on Polymarket in real-time.
+**Steal the Alpha.** Capture the moves of the smartest whales on Polymarket in real-time with a sleek, easy-to-use Web Dashboard.
 
-This high-performance Python bot monitors any target wallet and instantly replicates their trades on your account. Whether they are betting on breaking news, elections, or crypto prices, you'll be right there with them.
+This tool monitors any target wallet and instantly replicates their trades on your account using the Polygon CLOB for maximum speed.
 
 ---
 
-## 🚀 Key Features
+## ⚡ Features
 
-*   **⚡ Instant Execution**: Detects and copies trades within seconds using the Polymarket Data API.
-*   **🎯 Target Monitoring**:  Watch any specific wallet address (Whales, Insiders, Top Traders).
-*   **💸 Smart Order Placement**: Uses aggressive Limit Orders to ensure your trade gets filled immediately (simulating Market Orders).
-*   **🔒 Secure**: Your keys remain local. Direct interaction with the Polygon CLOB (Central Limit Order Book).
-*   **⚙️ Fully Configurable**: Set your own trade size (USDC amount) and custom proxy credentials.
+*   **🖥️ Web Dashboard**: A premium, dark-mode UI to configure and monitor your bot without touching code.
+*   **🚀 Instant Execution**: Detects and copies trades milliseconds after they happen.
+*   **🎯 Target Monitoring**: Watch any specific wallet address (Whales, Insiders, Top Traders).
+*   **💸 Smart & Aggressive**: Uses optimized Limit Orders (Buy @ 0.99 / Sell @ 0.01) to ensure immediate fills.
+*   **🔒 Secure**: Your keys remain local. No middleman servers.
+*   **⚙️ Fully Configurable**: Adjust trade size and target wallet on the fly.
 
 ## 🛠️ Installation
 
@@ -27,31 +28,41 @@ This high-performance Python bot monitors any target wallet and instantly replic
     pip install -r requirements.txt
     ```
 
-3.  **Setup Configuration**:
-    Copy the example environment file:
+3.  **Setup Configuration (Optional for CLI, unnecessary for Web)**:
+    Copy the example environment file if you plan to run headless:
     ```bash
     cp .env.example .env
     ```
 
-4.  **Configure your keys**:
-    Open `.env` and fill in your details:
-    *   `target_wallet_address`: The wallet address you want to copy.
-    *   `private_key`: Your Polygon wallet private key (Must have USDC & MATIC).
-    *   `api_key`, `api_secret`, `api_passphrase`: Your Polymarket CLOB API credentials.
-    *   `amount_per_trade`: How much USDC to bet per trade (e.g., 10).
-
 ## 🏃‍♂️ Usage
 
-Start the bot and watch it work:
+### Option 1: Web Interface (Recommended)
+The easiest way to use the bot.
 
-```bash
-python bot.py
-```
+1.  Start the web server:
+    ```bash
+    python app.py
+    ```
+2.  Open your browser and navigate to:
+    **`http://127.0.0.1:5000`**
 
-The bot will displaying "Monitoring wallet: 0x..." and print logs whenever a new trade is detected and copied.
+3.  Enter your **Private Key**, **Target Wallet**, and **Amount**, then click **Start**.
 
----
+### Option 2: Command Line (Headless)
+Best for servers or advanced users.
+
+1.  Edit your `.env` file with your credentials.
+2.  Run the bot:
+    ```bash
+    python bot.py
+    ```
+
+## ☁️ Deployment
+
+You can deploy this on any cloud provider (Render, Railway, Heroku) to run 24/7.
+*   **Build Command**: `pip install -r requirements.txt`
+*   **Start Command**: `gunicorn app:app`
 
 ## ⚠️ Disclaimer
 
-**Use at your own risk.** accessing DeFi protocols and trading involves risk of financial loss. This software is provided "as is" without any warranty. High-frequency trading or copying loss-making wallets can result in loss of funds. Ensure you have enough MATIC for gas (if required) and USDC for trades.
+**Use at your own risk.** accessing DeFi protocols and trading involves risk of financial loss. This software is provided "as is" without any warranty. High-frequency trading or copying loss-making wallets can result in loss of funds. 
