@@ -54,4 +54,4 @@ The bot will displaying "Monitoring wallet: 0x..." and print logs whenever a new
 
 ## ⚠️ Disclaimer
 
-**Use at your own risk.** accessing DeFi protocols and trading involves risk of financial loss. This software is provided "as is" without any warranty. High-frequency trading or copying loss-making wallets can result in loss of funds. Ensure you have enough MATIC for gas (if required) and USDC for trades.
+**Use at your own risk.** accessing DeFi protocols and trading involves risk of financial loss. This software is provided "as is" without any warranty. High-frequency trading or copying loss-making wallets can result in loss of funds. 
