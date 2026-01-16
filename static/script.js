@@ -42,7 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.logs.length === 0) {
                  log("Waiting for logs...", "system");
             } else {
-                data.logs.forEach(l => {
+                // Reverse logs so newest appear at the bottom
+                data.logs.slice().reverse().forEach(l => {
                     const type = l.toLowerCase().includes('error') ? 'error' : 'info';
                     log(l, type);
                 });
