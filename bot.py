@@ -6,7 +6,7 @@ import threading
 from typing import List, Dict, Optional, Any
 from dotenv import load_dotenv
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import OrderArgs, OrderType
+from py_clob_client.clob_types import OrderArgs, OrderType, ApiCreds
 from eth_account import Account
 
 # Custom logger for UI integration
@@ -82,11 +82,11 @@ class CopyBot:
                 host=self.host,
                 key=self.private_key,
                 chain_id=self.chain_id,
-                creds={
-                    "api_key": self.api_key,
-                    "api_secret": self.api_secret,
-                    "api_passphrase": self.api_passphrase
-                }
+                creds=ApiCreds(
+                    api_key=self.api_key,
+                    api_secret=self.api_secret,
+                    api_passphrase=self.api_passphrase
+                )
             )
         except Exception as e:
             self.logger.error(f"Client Init Failed: {e}")
@@ -169,20 +169,24 @@ class CopyBot:
 
             self.logger.info(f"Propagating Order: {side} {size} shares @ ${price}")
             
+            # Note: In py-clob-client, side is a string "BUY" or "SELL" 
+            # and OrderType is for GTC/FOK/FAK (usually GTC by default)
             order_args = OrderArgs(
                 price=price,
                 size=size,
-                side=OrderType.BUY if side == "BUY" else OrderType.SELL,
+                side=side, # side is already "BUY" or "SELL"
                 token_id=token_id
             )
             
-            resp = self.client.create_order(order_args)
-            order_id = resp.get('orderID', 'FAILED')
+            # Note: create_and_post_order both creates the signed order and submits it.
+            # It returns the response from the POST request.
+            resp = self.client.create_and_post_order(order_args)
             
-            if order_id != 'FAILED':
+            if resp.get('success'):
+                order_id = resp.get('orderID', 'SUCCESS')
                 self.logger.info(f"Order Executed Successfully! ID: {order_id[:8]}...")
             else:
-                self.logger.error(f"Execution response: {resp}")
+                self.logger.error(f"Execution failed: {resp.get('errorMsg', 'Unknown Error')}")
             
         except Exception as e:
             self.logger.error(f"Replication failed: {e}")

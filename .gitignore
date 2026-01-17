@@ -9,6 +9,8 @@ __pycache__/
 venv/
 env/
 .venv/
+fix_allowances.py
+generate_keys.py
 
 # IDE settings
 .vscode/

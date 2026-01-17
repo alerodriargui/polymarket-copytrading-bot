@@ -1,9 +1,13 @@
 from flask import Flask, render_template, request, jsonify, session
 from flask_session import Session
 from bot import CopyBot
+from dotenv import load_dotenv
 import os
 import uuid
 from secrets import token_hex
+
+# Load environment variables (.env)
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -52,12 +56,14 @@ def start_bot():
         return jsonify({"message": "Your PolyCopy Engine is already active."}), 400
 
     try:
-        # Extract payload
-        target = data.get('target')
-        pk = data.get('private_key')
-        api_key = data.get('api_key')
-        api_secret = data.get('api_secret')
-        passphrase = data.get('passphrase')
+        # Extract and sanitize payload
+        target = data.get('target', '').strip()
+        pk = data.get('private_key', '').strip()
+        
+        # UI inputs take precedence, then .env as fallback
+        api_key = data.get('api_key', '').strip() or os.getenv("api_key")
+        api_secret = data.get('api_secret', '').strip() or os.getenv("api_secret")
+        passphrase = data.get('passphrase', '').strip() or os.getenv("api_passphrase")
         amount = data.get('amount')
         match_amount = data.get('match_amount', False)
         
