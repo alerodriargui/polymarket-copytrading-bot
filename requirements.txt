@@ -1,6 +1,7 @@
+flask
+flask-session
+gunicorn
 py-clob-client
 python-dotenv
 requests
 web3
-flask
-gunicorn
